@@ -47,6 +47,13 @@ class DashboardSubscriber(Node):
 def ros_spin(node):
     rclpy.spin(node)
 
+is_on = False
+
+def toggle_callback():
+    global is_on
+    is_on = not is_on
+    dpg.set_item_label("toggle_btn", f"ON" if is_on else "OFF")
+    print("Current state:", is_on)
 
 # =============================================================
 # DEAR PY GUI (YOUR ORIGINAL GUI + ROS BINDING)
@@ -120,7 +127,8 @@ def main():
                     with dpg.child_window(border=True):
                         dpg.add_text("Controls", color=(180, 200, 255))
                         dpg.add_separator()
-                        dpg.add_button(label="Set Green", height=30, callback=lambda: set_led("green"))
+                        with dpg.group(horizontal=True):
+                                dpg.add_text("Go (Toggle):");     dpg.add_button(label="OFF", tag="toggle_btn", callback=toggle_callback)
                         dpg.add_button(label="Set Red", height=30, callback=lambda: set_led("red"))
                         dpg.add_button(label="Set Blue", height=30, callback=lambda: set_led("blue"))
 
