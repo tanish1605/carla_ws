@@ -4,51 +4,50 @@ import os
 import subprocess
 import sys
 
+scale = 1.0
+
 processes = {}  # to track running background processes
 # Path to your CARLA project directory
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-PARENT_DIR = os.path.dirname(PROJECT_DIR)
-SENSOR_DIR = os.path.join(PARENT_DIR, "IITBDV-Simulator", "src", "car_sensor", "car_sensor")
+CARLA_DIR = os.path.dirname(PROJECT_DIR)
+SENSOR_DIR = os.path.join(CARLA_DIR, "IITBDV-Simulator", "src", "car_sensor", "car_sensor")
+# SH_DIR = os.path.join(CARLA_DIR,"Unreal", "CarlaUE4","Binaries","LinuxNoEditor")
+SH_DIR = "/mnt/IITB-DV/IITB-DV-Simulator/mnt/carla/Unreal/CarlaUE4/Binaries/LinuxNoEditor"
 print("Project Directory:", SENSOR_DIR)
 
 def build_sensor_nodes():
     subprocess.Popen(["colcon","build"], cwd=os.path.dirname(SENSOR_DIR))
     # subprocess.Popen(["bash", "-c", "source install/setup.bash && ros2 run car_sensor car_spawner"], cwd=os.path.dirname(SENSOR_DIR))
 
-build_sensor_nodes()
+
+
+# uncomment launch_sensor_nodes only after fixing the nodes killing issue
 
 def launch_sensor_nodes():
-    # sensor_scripts = [
-    #     "car_spawner_node",
-    #     "pygame_control",
-    #     "lidar_out",
-    #     "camera_manager",
-    #     "imu_node"
-    # ]
+    sensor_scripts = {
+        "car_spawner": "car_spawner",
+        "pygame_control": "pygame_control",
+        "lidar_out": "lidar_out",
+        "camera_manager": "camera_manager",
+        "imu_node": "imu_node"
+    }
 
-    subprocess.Popen(["bash", "-c", "source install/setup.bash && ros2 run car_sensor car_spawner"], cwd=os.path.dirname(SENSOR_DIR))
-    subprocess.Popen(["bash", "-c", "source install/setup.bash && ros2 run car_sensor pygame_control"], cwd=os.path.dirname(SENSOR_DIR))
-    subprocess.Popen(["bash", "-c", "source install/setup.bash && ros2 run car_sensor lidar_out"], cwd=os.path.dirname(SENSOR_DIR))
-    subprocess.Popen(["bash", "-c", "source install/setup.bash && ros2 run car_sensor camera_manager"], cwd=os.path.dirname(SENSOR_DIR))
-    subprocess.Popen(["bash", "-c", "source install/setup.bash && ros2 run car_sensor imu_node"], cwd=os.path.dirname(SENSOR_DIR))
-
-
-    # for script in sensor_scripts:
-    #     # script_path = os.path.join(SENSOR_DIR, script)
-    #     # print("Launching:", script_path)
-
-    #     processes[script] = subprocess.Popen(["bash", "-c", "source install/setup.bash && ros2 run car_sensor", script], cwd=os.path.dirname(SENSOR_DIR))
-
-    #     # processes[script] = subprocess.Popen(["ros2","run","car_sensor",script], cwd=SENSOR_DIR)
+    # for name, script in sensor_scripts.items():
+    #     proc = subprocess.Popen(
+    #         ["bash", "-c", f"source install/setup.bash && ros2 run car_sensor {script}"],
+    #         cwd=os.path.dirname(SENSOR_DIR)
+    #     )
+    #     processes[name] = proc
 
 def launch_simulation():
-    # print("Launching simulation in:", PROJECT_DIR)
+    print("Launching simulation in:", PROJECT_DIR)
 
-    # processes["simulation"] = subprocess.Popen(
-    #     ["/mnt/IITB-DV/IITB-DV-Simulator/mnt/IITB-DV/carla/Unreal/CarlaUE4/Binaries/Linux/CarlaUE4.sh","-game"],
-    #     cwd=PROJECT_DIR
-    # )
-
+    processes["simulation"] = subprocess.Popen(
+        ["bash", "-c","./CarlaUE4.sh -carla-map=CustomTrack1 -windowed -ResX=1280 -ResY=720"],
+        cwd=SH_DIR
+    )
+    main_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "main_gui.py")
+    subprocess.Popen([sys.executable, main_path])
     # /mnt/IITB-DV/IITB-DV-Simulator/mnt/IITB-DV/carla/Unreal/CarlaUE4/Binaries/Linux/ 
 
 
@@ -65,20 +64,33 @@ def launch_simulation():
 
     # elif selected == "night_tex":
     #     subprocess.Popen(["python3", "night.py"], cwd=PROJECT_DIR)
-    launch_sensor_nodes()
+    # launch_sensor_nodes()
     # dpg.set_value("status_text", "Status: Running Simulation")
 
 def stop_simulation():
     # Kill CARLA process
     subprocess.Popen(["pkill", "-f", "CarlaUE4"])
 
-    # Kill make launch if stored
-    if "simulation" in processes:
-        processes["simulation"].terminate()
-        del processes["simulation"]
+    # Kill all ROS2 sensor nodes
+    ros_nodes = [
+        "camera_leftleft_node",
+        "camera_leftright_node",
+        "camera_manager_node",
+        "camera_rightleft_node",
+        "camera_rightright_node",
+        "car_spawner_node",
+        "carla_manual_control_node",
+        "lidar_spawner_node",
+        "pygame_control",
+        "imu_node"
+    ]
+    for node in ros_nodes:
+        subprocess.Popen(["pkill", "-f", node])
+
+    # Clear stored processes
+    processes.clear()
 
     dpg.set_value("status_text", "Status: Simulation Stopped")
-
 
 def run_track_generator():
     subprocess.Popen(["python3", "trackgenerator.py"], cwd=PROJECT_DIR)
@@ -105,8 +117,8 @@ def load_texture(filename, tag):
 
 
 screen_width, screen_height = 1920, 1080
-window_width = int(screen_width * 0.75)
-window_height = int(screen_height * 0.75)
+window_width = int(screen_width * (scale*0.75))
+window_height = int(screen_height * (scale*0.75))
 x_pos = (screen_width - window_width) // 2
 y_pos = (screen_height - window_height) // 2
 
@@ -157,8 +169,8 @@ with dpg.texture_registry(show=False):
         ("front_cam.png", "front_tex"),
         ("rear_cam.png", "rear_tex"),
         ("top_cam.png", "top_tex"),
-        ("veh1.png", "veh1_tex"),
-        ("veh2.png", "veh2_tex"),
+        ("ads_dv.png", "veh1_tex"),
+        ("e11.png", "veh2_tex"),
         ("veh3.png", "veh3_tex"),
     ]
 
@@ -190,7 +202,7 @@ def create_image_dropdown(label, texture_tags, default_tag):
         dpg.add_text(label + ":")
         dpg.add_image_button(
             texture_tag=current["selected"],
-            width=190, height=100,
+            width=scale*190, height=scale*100,
             tag=f"{label}_image"
         )
         with dpg.popup(parent=f"{label}_image", tag=f"{label}_popup"):
@@ -233,15 +245,15 @@ def close_launcher():
 
 with dpg.window(tag="main_window",
                 label="Simulation Control Panel",
-                pos=(30, 30),
-                width=window_width - 60,
-                height=window_height - 80,
+                pos=(scale*30, scale*30),
+                width=(window_width - 60)*scale,
+                height=(window_height - 80)*scale,
                 no_resize=True,
                 no_background=True):
 
     dpg.add_text("Simulation Dashboard")
     dpg.add_separator()
-    dpg.add_spacer(height=10)
+    dpg.add_spacer(height=scale*10)
 
     with dpg.group(horizontal=True):
         weather = create_image_dropdown("Weather", ["sunny_tex", "rainy_tex", "cloudy_tex", "night_tex"], "sunny_tex")
@@ -250,43 +262,53 @@ with dpg.window(tag="main_window",
         create_image_dropdown("Camera", ["front_tex", "rear_tex", "top_tex"], "front_tex")
         create_image_dropdown("Vehicle", ["veh1_tex", "veh2_tex", "veh3_tex"], "veh1_tex")
 
-    dpg.add_spacer(height=15)
+    dpg.add_spacer(height=scale*15)
 
     with dpg.group(horizontal=True):
-        dpg.add_spacer(width=50) 
-        dpg.add_button(label="Track Generator", width=200, height=40, callback=run_track_generator)
-        dpg.add_spacer(width=45) 
+        dpg.add_spacer(width=50*scale) 
+        dpg.add_button(label="Track Generator", width=200*scale, height=40*scale, callback=run_track_generator)
+        dpg.add_spacer(width=45*scale) 
         dpg.add_button(
         label="Sensor Attributes",
-        width=200,
-        height=40,
-        callback=open_sensor_gui
-)
-    dpg.add_spacer(height=15)
+        width=200*scale,
+        height=40*scale,
+        callback=open_sensor_gui)
+        dpg.add_spacer(width=65*scale) 
+        dpg.add_button(label="Build Sensor Nodes", width=200*scale, height=40*scale, callback=build_sensor_nodes)
+        dpg.add_spacer(width=50*scale)
+        dpg.add_button(label="Launch Sensor Nodes", width=200*scale, height=40*scale, callback=launch_sensor_nodes)
+        dpg.add_spacer(width=50*scale)
+        dpg.add_button(label="Advanced Settings", width=200*scale, height=40*scale
+                    #    , callback=advanced_settings
+                       )
+
+
+
+    dpg.add_spacer(height=scale*15)
 
     with dpg.group(horizontal=True):
         dpg.add_text("Visualizer:")
         dpg.add_combo(
             items=["Rviz","None"],
             default_value="None",
-            width=150
+            width=150*scale
         )
     
 
 
-    dpg.add_spacer(height=30)
+    dpg.add_spacer(height=30*scale)
     with dpg.group(horizontal=True):
-        dpg.add_image_button(texture_tag="launch_texture", width=655, height=250, callback=launch_simulation)
-        dpg.add_spacer(width=50)
-        dpg.add_image_button(texture_tag="stop_texture", width=655, height=250, callback=stop_simulation)
+        dpg.add_image_button(texture_tag="launch_texture", width=655*scale, height=250*scale, callback=launch_simulation)
+        dpg.add_spacer(width=50*scale)
+        dpg.add_image_button(texture_tag="stop_texture", width=655*scale, height=250*scale, callback=stop_simulation)
 
-    dpg.add_spacer(height=40)
+    dpg.add_spacer(height=40*scale)
     dpg.add_separator()
-    dpg.add_spacer(height=20)
+    dpg.add_spacer(height=20*scale)
 
     dpg.add_button(label="Close Launcher",
                    callback=close_launcher,
-                   width=200, height=40)
+                   width=scale*200, height=scale*40)
 
 dpg.set_frame_callback(1, draw_background)
 # -------------------------------------------------
